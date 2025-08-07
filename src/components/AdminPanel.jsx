@@ -35,6 +35,23 @@ const AdminPanel = ({ socket, currentRoom, onClose }) => {
     setShowConfirm(true);
   };
 
+  const handleBlockUser = () => {
+    if (!selectedUser) return;
+
+    setConfirmAction({
+      type: 'block',
+      message: `Are you sure you want to permanently block this user?`,
+      action: () => {
+        socket.emit('blockUser', {
+          targetUserId: selectedUser,
+          roomId: currentRoom
+        });
+        setSelectedUser('');
+      }
+    });
+    setShowConfirm(true);
+  };
+
   const handleClearMessages = () => {
     setConfirmAction({
       type: 'clear',
@@ -83,14 +100,22 @@ const AdminPanel = ({ socket, currentRoom, onClose }) => {
               </option>
             ))}
           </select>
-          
-          <button 
-            className="kick-button"
-            onClick={handleKickUser}
-            disabled={!selectedUser}
-          >
-            🚫 Kick User
-          </button>
+          <div className="user-buttons">
+            <button
+              className="kick-button"
+              onClick={handleKickUser}
+              disabled={!selectedUser}
+            >
+              🚫 Kick User
+            </button>
+            <button
+              className="block-button"
+              onClick={handleBlockUser}
+              disabled={!selectedUser}
+            >
+              🛑 Block User
+            </button>
+          </div>
         </div>
       </div>
 
