@@ -109,6 +109,13 @@ io.on('connection', (socket) => {
       
       // Create or find user
       let user = await User.findOne({ username });
+
+      // Check if user is blocked
+      if (user && user.isBlocked) {
+        socket.emit('error', 'You have been blocked from the chat.');
+        return;
+      }
+
       if (!user) {
         user = new User({ username, socketId: socket.id });
         await user.save();
@@ -230,6 +237,49 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       socket.emit('error', 'Failed to kick user');
+    }
+  });
+
+  socket.on('blockUser', async (data) => {
+    try {
+      const { targetUserId, roomId } = data;
+      const adminInfo = onlineUsers.get(socket.id);
+
+      if (!adminInfo) return;
+
+      // Check if user is admin
+      const admin = await User.findById(adminInfo.user);
+      if (!admin.isAdmin) {
+        socket.emit('error', 'Unauthorized');
+        return;
+      }
+
+      // Block user in DB
+      await User.findByIdAndUpdate(targetUserId, { isBlocked: true });
+
+      // Find target user's socket and kick them
+      const targetSocket = Array.from(onlineUsers.entries())
+        .find(([_, userInfo]) => userInfo.user.toString() === targetUserId);
+
+      if (targetSocket) {
+        const [targetSocketId, targetUserInfo] = targetSocket;
+        io.to(targetSocketId).emit('kicked', 'You have been blocked and kicked from the room.');
+        io.sockets.sockets.get(targetSocketId)?.leave(roomId);
+        onlineUsers.delete(targetSocketId);
+
+        io.to(roomId).emit('userLeft', {
+          username: targetUserInfo.username,
+          message: `${targetUserInfo.username} was blocked from the chat.`
+        });
+
+        const roomUsers = Array.from(onlineUsers.values())
+          .filter(u => u.roomId === roomId)
+          .map(u => ({ username: u.username, userId: u.user }));
+
+        io.to(roomId).emit('onlineUsers', roomUsers);
+      }
+    } catch (error) {
+      socket.emit('error', 'Failed to block user');
     }
   });
 

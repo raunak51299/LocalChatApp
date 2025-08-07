@@ -75,6 +75,33 @@
   gap: 1rem;
 }
 
+.user-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+.block-button {
+  padding: 0.75rem 1rem;
+  background: #c0392b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.block-button:hover:not(:disabled) {
+  background: #a52a1a;
+  transform: translateY(-1px);
+}
+
+.block-button:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .user-select {
   padding: 0.75rem;
   border: 2px solid #e1e8ed;
