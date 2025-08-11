@@ -4,6 +4,7 @@ import './JoinForm.css';
 
 const JoinForm = ({ socket, onJoin }) => {
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [roomId, setRoomId] = useState('General');
   const [availableRooms, setAvailableRooms] = useState([]);
   const [newRoomName, setNewRoomName] = useState('');
@@ -50,7 +51,16 @@ const JoinForm = ({ socket, onJoin }) => {
 
     setLoading(true);
     
-    socket.emit('join', { username: username.trim(), roomId });
+    const joinData = {
+      username: username.trim(),
+      roomId,
+    };
+
+    if (username.toLowerCase() === 'admin') {
+      joinData.password = password;
+    }
+
+    socket.emit('join', joinData);
     
     socket.on('joinSuccess', (userData) => {
       const selectedRoom = availableRooms.find(r => r._id === roomId);
@@ -119,6 +129,20 @@ const JoinForm = ({ socket, onJoin }) => {
               required
             />
           </div>
+
+          {username.toLowerCase() === 'admin' && (
+            <div className="form-group">
+              <label htmlFor="password">Admin Password:</label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter admin password..."
+                required
+              />
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="room">Select Room:</label>
