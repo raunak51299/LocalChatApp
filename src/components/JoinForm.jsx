@@ -5,7 +5,7 @@ import './JoinForm.css';
 const JoinForm = ({ socket, onJoin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [roomId, setRoomId] = useState('General');
+  const [roomId, setRoomId] = useState('');
   const [availableRooms, setAvailableRooms] = useState([]);
   const [newRoomName, setNewRoomName] = useState('');
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -36,10 +36,8 @@ const JoinForm = ({ socket, onJoin }) => {
       const rooms = await response.json();
       setAvailableRooms(rooms);
       
-      // Set default room if available
-      if (rooms.length > 0 && !roomId) {
-        setRoomId(rooms[0]._id);
-      }
+  // Set default room if available and none selected yet
+  if (rooms.length > 0 && !roomId) setRoomId(rooms[0]._id);
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
     }

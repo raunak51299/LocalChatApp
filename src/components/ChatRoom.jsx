@@ -52,6 +52,12 @@ const ChatRoom = ({ socket, user, roomId }) => {
       setMessages([]);
     });
 
+    // Request the latest online users after listeners are set up
+    // This avoids missing the initial broadcast that may occur during join
+    if (roomId) {
+      socket.emit('getOnlineUsers', { roomId });
+    }
+
     return () => {
       socket.off('newMessage');
       socket.off('userJoined');
