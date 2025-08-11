@@ -12,6 +12,7 @@ const socket = io(getSocketUrl());
 function App() {
   const [user, setUser] = useState(null);
   const [currentRoom, setCurrentRoom] = useState(null);
+  const [currentRoomName, setCurrentRoomName] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
@@ -38,14 +39,17 @@ function App() {
   }, []);
 
   const handleJoinRoom = (userData) => {
-    setUser(userData);
+  // userData now contains isAdmin from server
+  setUser(userData);
     setCurrentRoom(userData.roomId);
+    setCurrentRoomName(userData.roomName || userData.roomId);
   };
 
   const handleLeaveRoom = () => {
     setUser(null);
     setCurrentRoom(null);
-    setShowAdmin(false);
+  setShowAdmin(false);
+  setCurrentRoomName(null);
   };
 
   if (!user) {
@@ -74,14 +78,16 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>💬 {currentRoom}</h1>
+  <h1>💬 {currentRoomName || currentRoom}</h1>
         <div className="header-buttons">
-          <button 
-            className="admin-button"
-            onClick={() => setShowAdmin(!showAdmin)}
-          >
-            ⚙️ Admin
-          </button>
+          {user?.isAdmin && (
+            <button 
+              className="admin-button"
+              onClick={() => setShowAdmin(!showAdmin)}
+            >
+              ⚙️ Admin
+            </button>
+          )}
           <button 
             className="leave-button"
             onClick={handleLeaveRoom}
@@ -91,10 +97,11 @@ function App() {
         </div>
       </header>
 
-      {showAdmin && (
+      {user?.isAdmin && showAdmin && (
         <AdminPanel 
           socket={socket} 
           currentRoom={currentRoom}
+          currentUser={user}
           onClose={() => setShowAdmin(false)}
         />
       )}

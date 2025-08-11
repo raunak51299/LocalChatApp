@@ -79,13 +79,13 @@
 }
 
 .own-message .message-body {
-  background: #3498db;
+  background: #5ba7db;
   color: white;
   border-bottom-right-radius: 6px;
 }
 
 .other-message .message-body {
-  background: #f8f9fa;
+  background: #ffd3d3;
   color: #2c3e50;
   border-bottom-left-radius: 6px;
 }

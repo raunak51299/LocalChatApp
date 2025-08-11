@@ -117,7 +117,10 @@ io.on('connection', (socket) => {
       }
 
       if (!user) {
-        user = new User({ username, socketId: socket.id });
+        // If creating a brand new user, default admin if username is exactly 'admin'
+        // (seed script also creates this user with isAdmin=true)
+        const isAdmin = username === 'admin';
+        user = new User({ username, socketId: socket.id, isAdmin });
         await user.save();
       } else {
         user.socketId = socket.id;
@@ -145,9 +148,24 @@ io.on('connection', (socket) => {
       
       io.to(roomId).emit('onlineUsers', roomUsers);
       
-      socket.emit('joinSuccess', { userId: user._id, username });
+      socket.emit('joinSuccess', { userId: user._id, username, isAdmin: !!user.isAdmin });
     } catch (error) {
       socket.emit('error', 'Failed to join room');
+    }
+  });
+
+  // Provide current online users in a room on demand (useful when opening admin panel later)
+  socket.on('getOnlineUsers', (data) => {
+    try {
+      const { roomId } = data || {};
+      if (!roomId) return;
+      const roomUsers = Array.from(onlineUsers.values())
+        .filter(u => u.roomId === roomId)
+        .map(u => ({ username: u.username, userId: u.user }));
+      // Respond only to the requester
+      socket.emit('onlineUsers', roomUsers);
+    } catch (error) {
+      socket.emit('error', 'Failed to get online users');
     }
   });
 
@@ -301,6 +319,33 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('messagesCleared');
     } catch (error) {
       socket.emit('error', 'Failed to clear messages');
+    }
+  });
+
+  // Clear ALL messages across all rooms (admin only)
+  socket.on('clearAllMessages', async (data) => {
+    try {
+      const adminInfo = onlineUsers.get(socket.id);
+      
+      if (!adminInfo) return;
+
+      // Check if user is admin
+      const admin = await User.findById(adminInfo.user);
+      if (!admin.isAdmin) {
+        socket.emit('error', 'Unauthorized');
+        return;
+      }
+
+      const result = await Message.deleteMany({});
+      console.log(`Admin cleared ${result.deletedCount} messages from all rooms`);
+      
+      // Notify all rooms
+      io.emit('allMessagesCleared', { 
+        message: 'All chat history has been cleared by an administrator',
+        deletedCount: result.deletedCount 
+      });
+    } catch (error) {
+      socket.emit('error', 'Failed to clear all messages');
     }
   });
 

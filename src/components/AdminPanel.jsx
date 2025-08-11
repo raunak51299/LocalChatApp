@@ -1,22 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import './AdminPanel.css';
 
-const AdminPanel = ({ socket, currentRoom, onClose }) => {
+const AdminPanel = ({ socket, currentRoom, currentUser, onClose }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
 
+  // Filter out current user from the list (admin shouldn't kick/block themselves)
+  const otherUsers = onlineUsers.filter(user => user.userId !== currentUser?.userId);
+
   useEffect(() => {
+    // Guard: if somehow opened by non-admin, close immediately
+    if (!currentUser?.isAdmin) {
+      onClose?.();
+      return;
+    }
+
     // Listen for online users updates
     socket.on('onlineUsers', (users) => {
       setOnlineUsers(users);
     });
 
+    // Listen for admin action errors
+    socket.on('error', (message) => {
+      alert(`Admin Error: ${message}`);
+    });
+
+    // Request initial snapshot when panel opens
+    socket.emit('getOnlineUsers', { roomId: currentRoom });
+
     return () => {
       socket.off('onlineUsers');
+      socket.off('error');
     };
-  }, [socket]);
+  }, [socket, currentRoom, currentUser, onClose]);
 
   const handleKickUser = () => {
     if (!selectedUser) return;
@@ -92,9 +110,12 @@ const AdminPanel = ({ socket, currentRoom, onClose }) => {
             value={selectedUser} 
             onChange={(e) => setSelectedUser(e.target.value)}
             className="user-select"
+            disabled={otherUsers.length === 0}
           >
-            <option value="">Select a user...</option>
-            {onlineUsers.map((user) => (
+            <option value="">
+              {otherUsers.length === 0 ? "No other users online" : "Select a user..."}
+            </option>
+            {otherUsers.map((user) => (
               <option key={user.userId} value={user.userId}>
                 {user.username}
               </option>
@@ -104,14 +125,14 @@ const AdminPanel = ({ socket, currentRoom, onClose }) => {
             <button
               className="kick-button"
               onClick={handleKickUser}
-              disabled={!selectedUser}
+              disabled={!selectedUser || otherUsers.length === 0}
             >
               🚫 Kick User
             </button>
             <button
               className="block-button"
               onClick={handleBlockUser}
-              disabled={!selectedUser}
+              disabled={!selectedUser || otherUsers.length === 0}
             >
               🛑 Block User
             </button>
@@ -134,6 +155,7 @@ const AdminPanel = ({ socket, currentRoom, onClose }) => {
       <div className="admin-info">
         <p><strong>Room:</strong> {currentRoom}</p>
         <p><strong>Online Users:</strong> {onlineUsers.length}</p>
+        <p><strong>Other Users:</strong> {otherUsers.length}</p>
       </div>
 
       {showConfirm && (

@@ -53,7 +53,9 @@ const JoinForm = ({ socket, onJoin }) => {
     socket.emit('join', { username: username.trim(), roomId });
     
     socket.on('joinSuccess', (userData) => {
-      onJoin({ ...userData, roomId });
+      const selectedRoom = availableRooms.find(r => r._id === roomId);
+      const roomName = selectedRoom?.name || roomId;
+      onJoin({ ...userData, roomId, roomName });
       setLoading(false);
     });
 
