@@ -5,19 +5,50 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
 const os = require('os');
+const sanitizeHtml = require('sanitize-html');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+
+// Get local IP address
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const interface of interfaces[name]) {
+      if (interface.family === 'IPv4' && !interface.internal) {
+        return interface.address;
+      }
+    }
   }
+  return 'localhost';
+}
+
+const localIP = getLocalIP();
+
+const allowedOrigins = [
+  `http://localhost:5173`,
+  `http://127.0.0.1:5173`,
+  `http://${localIP}:5173`
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ["GET", "POST"],
+};
+
+const io = socketIo(server, {
+  cors: corsOptions
 });
 
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // MongoDB connection
@@ -35,20 +66,6 @@ const Room = require('./models/Room');
 const onlineUsers = new Map();
 const typingUsers = new Map();
 
-// Get local IP address
-function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const interface of interfaces[name]) {
-      if (interface.family === 'IPv4' && !interface.internal) {
-        return interface.address;
-      }
-    }
-  }
-  return 'localhost';
-}
-
-const localIP = getLocalIP();
 const PORT = process.env.PORT || 3001;
 
 // Routes
@@ -74,7 +91,14 @@ app.get('/api/rooms', async (req, res) => {
 app.post('/api/rooms', async (req, res) => {
   try {
     const { name, description } = req.body;
-    const room = new Room({ name, description });
+    const sanitizedName = sanitizeHtml(name, { allowedTags: [], allowedAttributes: {} });
+    const sanitizedDescription = sanitizeHtml(description, { allowedTags: [], allowedAttributes: {} });
+
+    if (!sanitizedName) {
+      return res.status(400).json({ error: 'Room name cannot be empty or just HTML tags.' });
+    }
+
+    const room = new Room({ name: sanitizedName, description: sanitizedDescription });
     await room.save();
     res.status(201).json(room);
   } catch (error) {
@@ -105,7 +129,13 @@ io.on('connection', (socket) => {
 
   socket.on('join', async (data) => {
     try {
-      const { username, roomId } = data;
+      const sanitizedUsername = sanitizeHtml(data.username, { allowedTags: [], allowedAttributes: {} });
+      if (!sanitizedUsername || sanitizedUsername.trim().length === 0) {
+        socket.emit('error', 'Invalid username.');
+        return;
+      }
+      const { roomId } = data;
+      const username = sanitizedUsername; // Use the sanitized username going forward
       
       // Create or find user
       let user = await User.findOne({ username });
@@ -116,11 +146,23 @@ io.on('connection', (socket) => {
         return;
       }
 
+      if (username.toLowerCase() === 'admin') {
+        if (data.password !== process.env.ADMIN_PASSWORD) {
+          socket.emit('error', 'Invalid admin password');
+          return;
+        }
+        // If admin password is correct, ensure user is marked as admin
+        if (!user) {
+          user = new User({ username, socketId: socket.id, isAdmin: true });
+          await user.save();
+        } else {
+          user.isAdmin = true;
+        }
+      }
+
       if (!user) {
-        // If creating a brand new user, default admin if username is exactly 'admin'
-        // (seed script also creates this user with isAdmin=true)
-        const isAdmin = username === 'admin';
-        user = new User({ username, socketId: socket.id, isAdmin });
+        // For regular users, create if they don't exist
+        user = new User({ username, socketId: socket.id, isAdmin: false });
         await user.save();
       } else {
         user.socketId = socket.id;
@@ -171,13 +213,25 @@ io.on('connection', (socket) => {
 
   socket.on('sendMessage', async (data) => {
     try {
-      const { content, roomId } = data;
+      const sanitizedContent = sanitizeHtml(data.content, {
+        allowedTags: [ 'b', 'i', 'em', 'strong', 'a' ],
+        allowedAttributes: {
+          'a': [ 'href' ]
+        }
+      });
+
+      if (!sanitizedContent || sanitizedContent.trim().length === 0) {
+        // Don't send empty messages
+        return;
+      }
+
+      const { roomId } = data;
       const userInfo = onlineUsers.get(socket.id);
       
       if (!userInfo) return;
 
       const message = new Message({
-        content,
+        content: sanitizedContent,
         user: userInfo.user,
         room: roomId
       });
